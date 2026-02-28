@@ -18,9 +18,19 @@ ENV/
 # Project specific temporary and output files
 temp/
 offline_pkg/
+logs/
 *.mp4
 *.wav
 *.aiff
 *.srt
-!demo.srt
-!demo.mp4
+*.log
+
+# Environments
+.env
+.venv
+
+# Testing
+.pytest_cache/
+htmlcov/
+.coverage
+.tox/

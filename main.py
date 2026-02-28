@@ -13,6 +13,7 @@ def main():
     parser.add_argument("--srt", "-s", required=True, help="输入的字幕路径 (.srt)")
     parser.add_argument("--output", "-o", default="output.mp4", help="输出的新视频路径")
     parser.add_argument("--tts", "-t", choices=["local", "http"], default="local", help="TTS引擎选择 (local: pyttsx3, http: 离线大模型接口)")
+    parser.add_argument("--voice", "-c", choices=list(config.VOICE_PROFILES.keys()), default="female", help="设置抽象角色音色")
     args = parser.parse_args()
 
     print(f"1. 正在解析字幕: {args.srt}")
@@ -22,11 +23,11 @@ def main():
         print("未提取到任何有效字幕。")
         return
 
-    print("2. 初始化 TTS 引擎...")
+    print(f"2. 初始化 TTS 引擎(音色: {args.voice})...")
     if args.tts == "local":
-        tts = Pyttsx3TTS(rate=150)
+        tts = Pyttsx3TTS(rate=150, voice_type=args.voice)
     else:
-        tts = HttpTTS()
+        tts = HttpTTS(voice_type=args.voice)
 
     if os.path.exists(config.TEMP_DIR):
         shutil.rmtree(config.TEMP_DIR)

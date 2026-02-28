@@ -5,7 +5,7 @@ Lark 是一个专为**完全离线（内网）环境**设计的轻量级自动�
 ## 🌟 核心特性
 
 - **🚀 绝对离线**：不需要任何外部网络请求，完美适应高度机密的内网和政企隔离环境。
-- **🧩 模块化插拔 TTS**：内置了基于操作系统底层接口的脱机离线发音引擎（如 Windows: `sapi5`, Mac: `say` 的 Fallback），同时预留了 HTTP 抽象接口便于未来直连自建的本地语音大模型。
+- **🧩 模块化插拔 TTS 与多音色支持**：内置了基于操作系统底层接口的脱机离线发音引擎（如 Windows: `sapi5`, Mac: `say` 的 Fallback），同时预留了 HTTP 抽象接口便于未来直连自建的本地语音大模型。工具内置了虚拟音色映射表，只需通过抽象指令（如 `male` 或 `female`），即可跨平台自动桥接最合适的原生声音组合。
 - **⏱️ 智能弹性对齐引擎**：能通过对字幕帧的物理运算绝对对齐时间周期。当生成语音比字幕展示时间长时，平滑调用 FFmpeg `atempo` 算法自适应轻微变速“挤压”进入时间轨；足够多出上限阈值部分可被精准斩断。短位音频则自动计算静默片进行填充（Pad）。
 - **🎵 高级合流胶囊**：生成的配乐通过 `ffmpeg-python` 原生指令注入源视频，自动执行降扰合轨（默认将源带环境声的音量压降至 20% 作为微量背景声）。
 
@@ -48,11 +48,14 @@ Lark/
 2. 在终端运行入口脚本：
 
 ```bash
-# 最简执行（使用默认的基础本地 TTS 引擎）
+# 最简执行（使用默认的基础本地女声 TTS 引擎）
 python main.py -v demo.mp4 -s demo.srt -o final_output.mp4
 
+# 指定音色（例如使用男声 `male`，或者播音腔 `broadcaster`）
+python main.py -v demo.mp4 -s demo.srt -o final_output.mp4 --voice male
+
 # 高阶执行：如果您已经利用 ChatTTS 或 CosyVoice 在本地跑起了 http 的服务大模型：
-python main.py -v demo.mp4 -s demo.srt -o final_output.mp4 --tts http
+python main.py -v demo.mp4 -s demo.srt -o final_output.mp4 --tts http --voice broadcaster
 ```
 
 ### 运行时控制流打印输出

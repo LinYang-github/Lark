@@ -3,6 +3,7 @@ import sys
 import json
 import urllib.request
 from abc import ABC, abstractmethod
+import config
 
 # 尝试导入 pyttsx3，如果失败不报错，而是留给具体实现的构造函数去处理
 try:
@@ -25,26 +26,32 @@ class TTSProvider(ABC):
 
 class Pyttsx3TTS(TTSProvider):
     """基于系统自带接口的本地 TTS 引擎实现 (Mac fallback: say, Windows: sapi5)"""
-    def __init__(self, rate: int = 150):
+    def __init__(self, rate: int = 150, voice_type: str = "female"):
         self.rate = rate
         self.is_mac = sys.platform == "darwin"
         self.engine = None
+        self.mac_voice = config.VOICE_PROFILES.get(voice_type, config.VOICE_PROFILES["female"])["mac"]
+        target_win_voice = config.VOICE_PROFILES.get(voice_type, config.VOICE_PROFILES["female"])["win"]
         
         if not self.is_mac and pyttsx3 is not None:
             try:
                 self.engine = pyttsx3.init()
                 self.engine.setProperty('rate', rate)
                 
-                # 尝试选择一个合适的中文声音 (跨平台差异较大)
+                # 尝试选择一个合适的系统声音
                 voices = self.engine.getProperty('voices')
                 for voice in voices:
                     voice_id = getattr(voice, 'id', '')
                     voice_name = getattr(voice, 'name', '')
                     lang_str = str(getattr(voice, 'languages', []))
                     
-                    if 'zh' in lang_str or 'Chinese' in voice_name or 'CN' in voice_id:
+                    # 优先匹配指定音色名，如果没有则 fallback 到普通中文
+                    if target_win_voice.lower() in voice_name.lower() or target_win_voice.lower() in voice_id.lower():
                         self.engine.setProperty('voice', voice_id)
                         break
+                    elif 'zh' in lang_str or 'Chinese' in voice_name or 'CN' in voice_id:
+                        self.engine.setProperty('voice', voice_id)
+                        # 不 break，继续找更精准的 target_win_voice
             except Exception as e:
                 print(f"初始化 pyttsx3 失败: {e}")
                 
@@ -54,8 +61,8 @@ class Pyttsx3TTS(TTSProvider):
             try:
                 import subprocess
                 aiff_path = output_path.replace(".wav", ".aiff")
-                # -v Ting-Ting 为 macOS 系统自带中文发音人，若没有可能 fallback
-                subprocess.run(["say", "-v", "Ting-Ting", "-o", aiff_path, text], check=True)
+                # 使用映射的发音人
+                subprocess.run(["say", "-v", self.mac_voice, "-o", aiff_path, text], check=True)
                 # 转换为 wav 格式
                 subprocess.run(["ffmpeg", "-y", "-i", aiff_path, output_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
                 if os.path.exists(aiff_path):
@@ -78,15 +85,16 @@ class Pyttsx3TTS(TTSProvider):
 
 class HttpTTS(TTSProvider):
     """预留的 HTTP TTS 类，用于后续对接本地大模型 API 服务"""
-    def __init__(self, api_url: str = 'http://localhost:8080/v1/audio/speech'):
+    def __init__(self, api_url: str = 'http://localhost:8080/v1/audio/speech', voice_type: str = "female"):
         self.api_url = api_url
+        self.http_voice = config.VOICE_PROFILES.get(voice_type, config.VOICE_PROFILES["female"])["http"]
         
     def generate_audio(self, text: str, output_path: str) -> bool:
         try:
             # [占位符]: 这里根据具体模型(如 ChatTTS/CosyVoice)定义 request body
             payload = {
                 "input": text,
-                "voice": "alloy", # 假设兼容 OpenAI 接口
+                "voice": self.http_voice, # 传递请求大模型的具体角色特征
                 "response_format": "wav"
             }
             data = json.dumps(payload).encode('utf-8')
@@ -115,7 +123,7 @@ if __name__ == "__main__":
     os.makedirs(temp_dir, exist_ok=True)
     
     print(f"正在初始化 Pyttsx3TTS 引擎 (Platform: {sys.platform})...")
-    tts = Pyttsx3TTS()
+    tts = Pyttsx3TTS(voice_type="male")
     print("开始生成音频...")
     success = tts.generate_audio(test_text, test_output)
     if success:
