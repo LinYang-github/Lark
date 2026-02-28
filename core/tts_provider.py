@@ -26,12 +26,15 @@ class TTSProvider(ABC):
 
 class Pyttsx3TTS(TTSProvider):
     """基于系统自带接口的本地 TTS 引擎实现 (Mac fallback: say, Windows: sapi5)"""
-    def __init__(self, rate: int = 150, voice_type: str = "female"):
+    def __init__(self, rate: int = 150, gender: str = "female", style: str = "standard"):
         self.rate = rate
         self.is_mac = sys.platform == "darwin"
         self.engine = None
-        self.mac_voice = config.VOICE_PROFILES.get(voice_type, config.VOICE_PROFILES["female"])["mac"]
-        target_win_voice = config.VOICE_PROFILES.get(voice_type, config.VOICE_PROFILES["female"])["win"]
+        
+        # 从维度地图获取具体音频引擎标识
+        mapping = config.VOICE_MAP.get(gender, config.VOICE_MAP["female"]).get(style, config.VOICE_MAP["female"]["standard"])
+        self.mac_voice = mapping["mac"]
+        target_win_voice = mapping["win"]
         
         if not self.is_mac and pyttsx3 is not None:
             try:
@@ -84,33 +87,43 @@ class Pyttsx3TTS(TTSProvider):
                 return False
 
 class HttpTTS(TTSProvider):
-    """预留的 HTTP TTS 类，用于后续对接本地大模型 API 服务"""
-    def __init__(self, api_url: str = 'http://localhost:8080/v1/audio/speech', voice_type: str = "female"):
-        self.api_url = api_url
-        self.http_voice = config.VOICE_PROFILES.get(voice_type, config.VOICE_PROFILES["female"])["http"]
+    """用于对接本地 CosyVoice 或其他 AI 模型 API 服务"""
+    def __init__(self, api_url: str = None, gender: str = "female", style: str = "standard"):
+        self.api_url = api_url or config.COSYVOICE_URL
+        mapping = config.VOICE_MAP.get(gender, config.VOICE_MAP["female"]).get(style, config.VOICE_MAP["female"]["standard"])
+        self.http_voice = mapping["http"]
         
     def generate_audio(self, text: str, output_path: str) -> bool:
         try:
-            # [占位符]: 这里根据具体模型(如 ChatTTS/CosyVoice)定义 request body
+            # 兼容 CosyVoice (OpenAI 规范) 的 Payload
             payload = {
+                "model": "cosyvoice",
                 "input": text,
-                "voice": self.http_voice, # 传递请求大模型的具体角色特征
+                "voice": self.http_voice, 
                 "response_format": "wav"
             }
             data = json.dumps(payload).encode('utf-8')
             req = urllib.request.Request(self.api_url, data=data, headers={'Content-Type': 'application/json'})
             
-            with urllib.request.urlopen(req, timeout=10) as response:
+            with urllib.request.urlopen(req, timeout=300) as response:
                 if response.status == 200:
                     with open(output_path, 'wb') as f:
                         f.write(response.read())
                     return True
                 else:
-                    print(f"HttpTTS 响应异常: {response.status}")
+                    print(f"CosyVoice API 响应异常: {response.status}")
                     return False
         except Exception as e:
-            print(f"HttpTTS 调用失败或接口未启动: {e}")
+            print(f"连接 CosyVoice 服务失败 (请确保服务已启动于 {self.api_url}): {e}")
             return False
+
+def get_tts_provider(mode: str, gender: str, style: str) -> TTSProvider:
+    """TTS 引擎工厂方法"""
+    if mode == "cosyvoice":
+        return HttpTTS(gender=gender, style=style)
+    else:
+        return Pyttsx3TTS(rate=150, gender=gender, style=style)
+
 
 if __name__ == "__main__":
     # ===== 阶段 2 独立测试入口 =====
@@ -123,7 +136,7 @@ if __name__ == "__main__":
     os.makedirs(temp_dir, exist_ok=True)
     
     print(f"正在初始化 Pyttsx3TTS 引擎 (Platform: {sys.platform})...")
-    tts = Pyttsx3TTS(voice_type="male")
+    tts = Pyttsx3TTS(gender="male", style="broadcaster")
     print("开始生成音频...")
     success = tts.generate_audio(test_text, test_output)
     if success:

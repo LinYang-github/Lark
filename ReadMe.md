@@ -1,71 +1,90 @@
-# Lark 视频字幕自动配音工具
+# Lark 视频字幕自动配音工具 (Lark AI Voice Studio)
 
-Lark 是一个专为**完全离线（内网）环境**设计的轻量级自动化视频配音与混轨工具。它通过读取本地的 `.mp4` 视频和配套的 `.srt` 字幕文件，调用本地 TTS 引擎自动生成对应语音，精准进行时间轴动态对齐压缩，最终合成融合音轨的新视频发布。
+Lark 是一个专为**完全离线（内网）环境**设计的轻量级自动化视频配音与混轨工具。它通过读取本地的 `.mp4` 视频和配套的 `.srt` 字幕文件，利用 AI 大模型或系统原生引擎自动生成语音，并精准进行时间轴动态对齐，最终合成高质量的配音视频。
+
+---
 
 ## 🌟 核心特性
 
-- **🚀 绝对离线**：不需要任何外部网络请求，完美适应高度机密的内网和政企隔离环境。
-- **🧩 模块化插拔 TTS 与多音色支持**：内置了基于操作系统底层接口的脱机离线发音引擎（如 Windows: `sapi5`, Mac: `say` 的 Fallback），同时预留了 HTTP 抽象接口便于未来直连自建的本地语音大模型。工具内置了虚拟音色映射表，只需通过抽象指令（如 `male` 或 `female`），即可跨平台自动桥接最合适的原生声音组合。
-- **⏱️ 智能弹性对齐引擎**：能通过对字幕帧的物理运算绝对对齐时间周期。当生成语音比字幕展示时间长时，平滑调用 FFmpeg `atempo` 算法自适应轻微变速“挤压”进入时间轨；足够多出上限阈值部分可被精准斩断。短位音频则自动计算静默片进行填充（Pad）。
-- **🎵 高级合流胶囊**：生成的配乐通过 `ffmpeg-python` 原生指令注入源视频，自动执行降扰合轨（默认将源带环境声的音量压降至 20% 作为微量背景声）。
+- **🎬 电影级 AI 配音 (New)**：集成阿里 **CosyVoice** 大模型，提供媲美真人的自然语感。支持“播音腔”、“标准”等多种风格。
+- **🧩 双引擎模式**：
+  - **CosyVoice (AI)**：极高质量，适合正式视频、宣传片。支持 Docker 离线部署。
+  - **Native (轻量)**：瞬时生成，直接调用系统底层接口（Mac: `say`, Win: `SAPI5`）。
+- **🎛️ 二维语音控制**：独立调控“性别 (男/女)”与“腔调 (标准/播音)”，跨引擎自动映射最佳音色。
+- **⏱️ 智能弹性对齐**：音频比字幕长时，自动执行 `atempo` 变速挤压；短时自动填充静默，确保音画绝对同步。
+- **🎵 自动化合流**：自动压降原视频环境声（默认 20%），确保配音清晰可闻。
+- **🚀 绝对离线**：全链路无需互联网，所有模型 and 计算均在本地完成。
 
-## 📦 项目架构与文件功能说明
+---
+
+## 📦 项目架构
 
 ```text
 Lark/
-├── config.py                   # 全局策略中心 (容错倍速阈值、音轨混合比率)
-├── main.py                     # 全自动化胶囊调度统一入口
-├── requirements.txt            # 脱机部署环境声明 (兼容 Win/Mac)
+├── gui.py                      # 图形化界面入口 (可视化操作)
+├── main.py                     # 命令行胶囊调度入口 (自动化脚本)
+├── config.py                   # 全局配置中心 (音色映射、混流比例)
+├── cosyvoice_api.py            # CosyVoice API 桥接适配器
 └── core/
-    ├── subtitle_parser.py      # 字幕提取渲染器 (绝对毫秒级别转换)
-    ├── tts_provider.py         # 跨平台 TTS 服务驱动生成器
-    ├── audio_processor.py      # 时间轴计算组装并执行变速垫黑引擎
-    └── video_mixer.py          # 音轨最终并线投射器
+    ├── tts_provider.py         # 多引擎 TTS 驱动实现 (Native/CosyVoice)
+    ├── audio_processor.py      # 音频对齐与变速处理
+    └── video_mixer.py          # FFmpeg 最终合成引擎
 ```
 
-## 🛠️ 安装指引 (离线环境准备)
+---
 
-工具链底层极度依赖著名的 [FFmpeg](https://ffmpeg.org/download.html)。请确保您的运行计算机上**配置了 FFmpeg 的系统环境变量**。
+## 🛠️ 环境准备 (离线部署)
 
-### Python 包离线封转
+### 1. 基础依赖
+- **FFmpeg**: 必须安装并配置系统环境变量。
+- **Python-TK**: 如果 Mac 运行 GUI 报错，请执行 `brew install python-tk@3.14` (对应您的 Python 版本)。
 
-如果您要在物理隔离的 Windows 机器上安装：
-1. **(有网机器)** 用外网终端执行下载所需 whl 包：
-   ```bash
-   mkdir offline_pkg
-   pip download -r requirements.txt -d ./offline_pkg
-   ```
-2. **(无网机器)** 将文件夹通过介质拷贝进内网机后安装：
-   ```bash
-   pip install --no-index --find-links=./offline_pkg -r requirements.txt
-   ```
+### 2. CosyVoice AI 部署 (可选，推荐)
+为了获得最高质量的配音，建议启动 CosyVoice 容器：
 
-*注意：Mac 的 Python 3.13 之后版本已不再预装 `audioop` 标准内联库，该程序内置了向后全向兼容补丁 (`audioop-lts`) 以保障 Mac 端的畅通运转。*
-
-## 🚀 极速起跑
-
-1. 准备您的输入素材并置于根目录（例如 `demo.mp4`, `demo.srt`）。
-2. 在终端运行入口脚本：
-
+#### A. 本地预下载模型 (在有网环境)
 ```bash
-# 最简执行（使用默认的基础本地女声 TTS 引擎）
-python main.py -v demo.mp4 -s demo.srt -o final_output.mp4
-
-# 指定音色（例如使用男声 `male`，或者播音腔 `broadcaster`）
-python main.py -v demo.mp4 -s demo.srt -o final_output.mp4 --voice male
-
-# 高阶执行：如果您已经利用 ChatTTS 或 CosyVoice 在本地跑起了 http 的服务大模型：
-python main.py -v demo.mp4 -s demo.srt -o final_output.mp4 --tts http --voice broadcaster
+source venv/bin/activate
+pip install modelscope
+python3 -c "from modelscope import snapshot_download; snapshot_download('iic/CosyVoice-300M', local_dir='./models/CosyVoice-300M')"
 ```
 
-### 运行时控制流打印输出
+#### B. 启动容器 (完全离线)
+```bash
+docker run -d --name lark-cosyvoice \
+  -p 50000:50000 -p 9233:9233 \
+  -v "$(pwd)/cosyvoice_api.py:/app/cosyvoice_api.py" \
+  -v "$(pwd)/models/CosyVoice-300M:/app/models/CosyVoice-300M" \
+  --platform linux/amd64 harryliu888/cosyvoice:latest \
+  bash -c "python3 webui.py --port 50000 & python3 cosyvoice_api.py"
+```
 
-在执行这行命令时，系统会自动清理先前的历史记录并显示每个周期的控制台渲染阶段：
+---
 
-*   `1. 正在解析字幕: demo.srt`
-*   `2. 初始化 TTS 引擎...`
-*   `3. 音频合成与时间轴对齐处理 (耗时操作)...` -> 这里会执行数百次碎块化创建与对齐计算。
-*   `4. 视频音频混流封装...`
-*   `🎉 任务全部完成！最终配音视频已保存至: final_output.mp4`
+## 🚀 使用指南
 
-最后，程序将进行生命周期的安全清理，回收所有配音中途产生的零碎文件以节省内网储存空间。
+### 1. 图形化界面 (推荐)
+直接运行：
+```bash
+python gui.py
+```
+- 在界面选定 `.mp4` 和 `.srt`。
+- **TTS 引擎**：选择 `native` 或 `cosyvoice`。
+- **语音类型**：选择性别和风格。
+- 点击 **“启动自动混流渲染”**。
+
+### 2. 命令行模式
+```bash
+# 使用 CosyVoice 男声播音腔
+python main.py -v input.mp4 -s input.srt -o output.mp4 --tts cosyvoice --gender male --style broadcaster
+
+# 使用系统原生女声
+python main.py -v input.mp4 -s input.srt -o output.mp4 --tts native --gender female
+```
+
+---
+
+## 💡 注意事项
+- **推理性能**：在 Mac ARM 机器上通过 Docker 模拟 x86 运行 CosyVoice，每句语音生成约需 30-50 秒，请耐心等待。
+- **断网提示**：启动成功后，您可以完全拔掉网线使用。
+- **清理**：程序运行结束后会自动清理 `temp_audio/` 目录下的中间文件。

@@ -17,13 +17,20 @@ ENV/
 
 # Project specific temporary and output files
 temp/
+temp_audio/
 offline_pkg/
 logs/
+models/
 *.mp4
 *.wav
 *.aiff
 *.srt
 *.log
+
+# AI & Docker specific
+.gemini/
+.docker/
+cosyvoice_api.py
 
 # Environments
 .env

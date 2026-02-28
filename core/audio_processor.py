@@ -1,7 +1,7 @@
 import os
 import subprocess
 from pydub import AudioSegment
-from typing import List
+from typing import List, Callable
 
 from .subtitle_parser import SubtitleItem
 from .tts_provider import TTSProvider
@@ -20,19 +20,25 @@ class AudioProcessor:
         # 屏蔽 FFmpeg 输出
         subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         
-    def process_subtitles(self, subtitles: List[SubtitleItem], temp_dir: str, max_speed: float) -> str:
+    def process_subtitles(self, subtitles: List[SubtitleItem], temp_dir: str, max_speed: float, progress_callback: Callable[[int, int], None] = None) -> str:
         """
         核心处理：遍历字幕并生成整条拼装对齐好的新音轨
         :param subtitles: 解析后的字幕列表
         :param temp_dir: 临时文件存放目录
         :param max_speed: 最大允许的加速倍率
+        :param progress_callback: UI 回调，报告进度 (当前条数, 总条数)
         :return: 最终合成好的 wav 音频绝对路径
         """
         # 初始一个空声轨作为叠加根部
         final_audio = AudioSegment.silent(duration=0)
         current_time_ms = 0
+        total = len(subtitles)
         
-        for item in subtitles:
+        for i, item in enumerate(subtitles):
+            # 报告进度
+            if progress_callback:
+                progress_callback(i, total)
+                
             # 1. 填补间隔静音 (前一句结束到当前句开始)
             if item.start_time_ms > current_time_ms:
                 gap = item.start_time_ms - current_time_ms
@@ -86,6 +92,10 @@ class AudioProcessor:
                     final_audio += accelerated_segment
                     
                 current_time_ms += target_dur_ms
+                
+        # 最终进度汇报 100%
+        if progress_callback:
+            progress_callback(total, total)
                 
         # 4. 全部循环拼装完毕，导出单条合轨音频
         output_path = os.path.join(temp_dir, "merged_vocal.wav")

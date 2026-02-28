@@ -11,12 +11,29 @@ os.makedirs(TEMP_DIR, exist_ok=True)
 MAX_SPEED_UP_RATIO = 1.5  # 最大允许的加速倍率 (超过则裁剪结尾)
 BACKGROUND_VOLUME_RATIO = 0.2  # 原视频作为背景音的音量比例 (20%)
 
-# 跨平台原生离线音色映射表
-# 键名: 抽象音色特征 (可在外部 CLI 直接指定)
-# 对应值: Mac下的 say 命令发音人 (mac), Windows下的 sapi5 引擎发音人 (win), Http 离线大模型发音人特征 (http)
-VOICE_PROFILES = {
-    "female": {"mac": "Ting-Ting", "win": "Huihui", "http": "nova"},
-    "male": {"mac": "Kankan", "win": "Kangkang", "http": "echo"},
-    "broadcaster": {"mac": "Ting-Ting", "win": "Huihui", "http": "alloy"}, # 系统自带局限，默认回落机制
+# TTS 引擎模式选择: "native" (系统自带) 或 "cosyvoice" (本地部署的 AI 服务)
+TTS_MODE = "native" 
+COSYVOICE_URL = "http://localhost:9233/v1/audio/speech" # 默认 CosyVoice OpenAI 兼容接口地址
+
+# 可选维度定义
+GENDERS = ["male", "female"]
+STYLES = ["standard", "broadcaster"]
+
+# 跨平台/AI 二维映射表 [性别][维度风格]
+# 映射逻辑：[gender][style] -> {mac, win, http_voice_id}
+VOICE_MAP = {
+    "female": {
+        "standard": {"mac": "Tingting", "win": "Huihui", "http": "中文女"},
+        "broadcaster": {"mac": "Tingting", "win": "Huihui", "http": "晓晓"},
+    },
+    "male": {
+        "standard": {"mac": "Eddy", "win": "Kangkang", "http": "中文男"},
+        "broadcaster": {"mac": "Eddy", "win": "Kangkang", "http": "云扬"},
+    }
+
 }
+
+
+
+
 
