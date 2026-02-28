@@ -1,0 +1,6 @@
+pysrt==1.1.2
+chardet==5.2.0
+pyttsx3==2.90
+pydub==0.25.1
+pyobjc>=9.0; sys_platform == "darwin"
+audioop-lts>=0.2.1; python_version >= '3.13'

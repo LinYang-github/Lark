@@ -1,0 +1,26 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# OS specific files
+.DS_Store
+
+# IDE and editors
+.vscode/
+.idea/
+
+# Project specific temporary and output files
+temp/
+offline_pkg/
+*.mp4
+*.wav
+*.aiff
+*.srt
+!demo.srt
+!demo.mp4
