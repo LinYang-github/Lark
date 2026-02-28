@@ -1,55 +1,78 @@
-# Lark 视频字幕自动配音工具 (Lark AI Voice Studio)
+# 🕊️ Lark AI Voice Studio (Lark 视频字幕自动配音工具)
 
-Lark 是一个专为**完全离线（内网）环境**设计的轻量级自动化视频配音与混轨工具。它通过读取本地的 `.mp4` 视频和配套的 `.srt` 字幕文件，利用 AI 大模型或系统原生引擎自动生成语音，并精准进行时间轴动态对齐，最终合成高质量的配音视频。
-
----
-
-## 🌟 核心特性
-
-- **🎬 电影级 AI 配音 (New)**：集成阿里 **CosyVoice** 大模型，提供媲美真人的自然语感。支持“播音腔”、“标准”等多种风格。
-- **🧩 双引擎模式**：
-  - **CosyVoice (AI)**：极高质量，适合正式视频、宣传片。支持 Docker 离线部署。
-  - **Native (轻量)**：瞬时生成，直接调用系统底层接口（Mac: `say`, Win: `SAPI5`）。
-- **🎛️ 二维语音控制**：独立调控“性别 (男/女)”与“腔调 (标准/播音)”，跨引擎自动映射最佳音色。
-- **⏱️ 智能弹性对齐**：音频比字幕长时，自动执行 `atempo` 变速挤压；短时自动填充静默，确保音画绝对同步。
-- **🎵 自动化合流**：自动压降原视频环境声（默认 20%），确保配音清晰可闻。
-- **🚀 绝对离线**：全链路无需互联网，所有模型 and 计算均在本地完成。
+> **极简、强大、完全离线的视频配音工业级解决方案。**
+> 专为政企内网、物理隔离环境设计，支持阿里 CosyVoice 大模型与系统原生引擎双切换。
 
 ---
 
-## 📦 项目架构
+## 📸 界面预览
+*(运行 `python gui.py` 即可开启直观的图形化操作界面)*
 
-```text
-Lark/
-├── gui.py                      # 图形化界面入口 (可视化操作)
-├── main.py                     # 命令行胶囊调度入口 (自动化脚本)
-├── config.py                   # 全局配置中心 (音色映射、混流比例)
-├── cosyvoice_api.py            # CosyVoice API 桥接适配器
-└── core/
-    ├── tts_provider.py         # 多引擎 TTS 驱动实现 (Native/CosyVoice)
-    ├── audio_processor.py      # 音频对齐与变速处理
-    └── video_mixer.py          # FFmpeg 最终合成引擎
+- **左侧控制面板**：一键导入 MP4 视频与 SRT 字幕。
+- **引擎控制中心**：支持 `AI 模式 (CosyVoice)` 与 `轻量模式 (Native)` 自由切换。
+- **二维参数调节**：性别 (Male/Female) × 风格 (Standard/Broadcaster) 独立选择。
+- **实时进度反馈**：可视化渲染进度条。
+
+---
+
+## 🚀 核心优势 (Why Lark?)
+
+1.  **💎 电影级 AI 音色**：深度集成阿里 **CosyVoice-300M**，告别机械音，享受丝滑自然的播音员语感。
+2.  **🔒 绝对物理离线**：不传云端，不连外网。保护您的视频素材隐私与数据安全，完美适配 Windows/Mac 离线环境。
+3.  **⏱️ 毫秒级音画同步**：内置智能变速 (`atempo`) 引擎，音频过长自动无损压缩，音频不足自动静默填充，确保每一帧画面都有完美的配音对应。
+4.  **🎵 原声压降混音**：自动对原视频背景声进行 20% 避让处理（Audio Ducking），让配音更有质感。
+
+---
+
+## 💻 快速部署与环境配置
+
+针对不同的操作系统，请遵循以下步骤进行环境准备。
+
+### 1. 基础依赖 (共同要求)
+- **Python**: 推荐 3.10 - 3.14 版本。
+- **FFmpeg**: **必须安装**。
+  - 请确保在终端执行 `ffmpeg -version` 有输出。
+  - **Windows**: 下载 [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) 构建版本，并将 `bin` 目录添加至系统变量 `PATH`。
+  - **macOS**: 建议通过 `brew install ffmpeg` 安装。
+
+### 2. 下载依赖包
+#### Windows (PowerShell/CMD):
+```powershell
+python -m venv venv
+.\venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
----
-
-## 🛠️ 环境准备 (离线部署)
-
-### 1. 基础依赖
-- **FFmpeg**: 必须安装并配置系统环境变量。
-- **Python-TK**: 如果 Mac 运行 GUI 报错，请执行 `brew install python-tk@3.14` (对应您的 Python 版本)。
-
-### 2. CosyVoice AI 部署 (可选，推荐)
-为了获得最高质量的配音，建议启动 CosyVoice 容器：
-
-#### A. 本地预下载模型 (在有网环境)
+#### macOS (Terminal):
 ```bash
+python3 -m venv venv
 source venv/bin/activate
-pip install modelscope
-python3 -c "from modelscope import snapshot_download; snapshot_download('iic/CosyVoice-300M', local_dir='./models/CosyVoice-300M')"
+pip install -r requirements.txt
 ```
 
-#### B. 启动容器 (完全离线)
+### 3. CosyVoice AI 引擎配置 (高保真配音)
+项目支持接入基于 Docker 容器运行的 CosyVoice 服务以实现最高音质输出。
+
+#### A. 模型权重预下载 (联网环境执行)
+```bash
+pip install modelscope
+python -c "from modelscope import snapshot_download; snapshot_download('iic/CosyVoice-300M', local_dir='./models/CosyVoice-300M')"
+```
+
+#### B. 启动容器服务 (离线可用)
+确保已安装并运行 **Docker Desktop**。
+
+**Windows (PowerShell):**
+```powershell
+docker run -d --name lark-cosyvoice `
+  -p 50000:50000 -p 9233:9233 `
+  -v "${PWD}/cosyvoice_api.py:/app/cosyvoice_api.py" `
+  -v "${PWD}/models/CosyVoice-300M:/app/models/CosyVoice-300M" `
+  --platform linux/amd64 harryliu888/cosyvoice:latest `
+  bash -c "python3 webui.py --port 50000 & python3 cosyvoice_api.py"
+```
+
+**macOS (Terminal):**
 ```bash
 docker run -d --name lark-cosyvoice \
   -p 50000:50000 -p 9233:9233 \
@@ -61,30 +84,27 @@ docker run -d --name lark-cosyvoice \
 
 ---
 
-## 🚀 使用指南
+## �️ 项目结构
 
-### 1. 图形化界面 (推荐)
-直接运行：
-```bash
-python gui.py
-```
-- 在界面选定 `.mp4` 和 `.srt`。
-- **TTS 引擎**：选择 `native` 或 `cosyvoice`。
-- **语音类型**：选择性别和风格。
-- 点击 **“启动自动混流渲染”**。
+- `gui.py`: **主入口**。运行后弹出可视化窗口。
+- `main.py`: 命令行入口。适合批量处理脚本。
+- `config.py`: 配置中心。可在此修改默认音量比例 (20%) 或 Windows 系统音色 ID。
+- `core/`: 核心引擎文件夹，包含字幕解析、TTS 驱动及视频混流。
 
-### 2. 命令行模式
-```bash
-# 使用 CosyVoice 男声播音腔
-python main.py -v input.mp4 -s input.srt -o output.mp4 --tts cosyvoice --gender male --style broadcaster
+---
 
-# 使用系统原生女声
-python main.py -v input.mp4 -s input.srt -o output.mp4 --tts native --gender female
-```
+## 📝 快速上手
+
+1.  运行 `python gui.py`。
+2.  选择您的视频和字幕文件。
+3.  **模式建议**：
+    - **快速预览**：选择 `native` 引擎。它会调用 Windows 内置的 `Huihui` 或 `Kangkang` (SAPI5)，速度极快。
+    - **最终成片**：启动 Docker 后选择 `cosyvoice` 引擎，使用 `Male` + `Broadcaster` (云扬音色)，体验极致 AI 效果。
+4.  点击 **“启动自动混流渲染”**。
+5.  成品视频将自动保存在原视频同目录下。
 
 ---
 
 ## 💡 注意事项
-- **推理性能**：在 Mac ARM 机器上通过 Docker 模拟 x86 运行 CosyVoice，每句语音生成约需 30-50 秒，请耐心等待。
-- **断网提示**：启动成功后，您可以完全拔掉网线使用。
-- **清理**：程序运行结束后会自动清理 `temp_audio/` 目录下的中间文件。
+- **Windows 用户**：若运行 `gui.py` 提示找不到 `tkinter`，通常是因为 Python 安装时未勾选 `tcl/tk` 组件。请重新运行 Python 安装程序并勾选 `Modify` -> `tcl/tk and IDLE`。
+- **资源清理**：程序运行完成后会自动清理 `temp_audio/` 中的零碎文件，请勿在运行期间手动删除该目录。
