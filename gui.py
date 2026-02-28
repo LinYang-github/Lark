@@ -22,10 +22,15 @@ class LarkDubbingApp:
         self.video_path_var = tk.StringVar()
         self.srt_path_var = tk.StringVar()
         self.tts_mode_var = tk.StringVar(value=config.TTS_MODE)
+        
+        # 引擎相关的具体参数定义
         self.gender_var = tk.StringVar(value="male") 
-        self.style_var = tk.StringVar(value="broadcaster") 
+        self.style_var = tk.StringVar(value="broadcaster")
+        self.language_var = tk.StringVar(value="中文")
+        self.rate_var = tk.IntVar(value=180) # 针对 Native 的语速
         
         self.create_widgets()
+        self.refresh_params_ui() # 初始化参数显示
 
     def create_widgets(self):
         pad_options = {'padx': 10, 'pady': 5}
@@ -44,40 +49,63 @@ class LarkDubbingApp:
         tk.Entry(frame_srt, textvariable=self.srt_path_var, width=35).pack(side=tk.LEFT, padx=5)
         tk.Button(frame_srt, text="浏览...", command=self.select_srt).pack(side=tk.LEFT)
 
-        # 3. 参数配置区
-        frame_config = tk.Frame(self.root)
-        frame_config.pack(fill=tk.X, **pad_options)
-        
-        tk.Label(frame_config, text="性别:").pack(side=tk.LEFT)
-        gender_cb = ttk.Combobox(frame_config, textvariable=self.gender_var, values=config.GENDERS, state="readonly", width=8)
-        gender_cb.pack(side=tk.LEFT, padx=5)
-        
-        tk.Label(frame_config, text="风格:").pack(side=tk.LEFT, padx=(15, 0))
-        style_cb = ttk.Combobox(frame_config, textvariable=self.style_var, values=config.STYLES, state="readonly", width=12)
-        style_cb.pack(side=tk.LEFT, padx=5)
-
-        # 4. 引擎选择区
+        # 3. 引擎选择区 (置顶以触发参数刷新)
         frame_engine = tk.Frame(self.root)
         frame_engine.pack(fill=tk.X, **pad_options)
         tk.Label(frame_engine, text="TTS 引擎:").pack(side=tk.LEFT)
-        engine_cb = ttk.Combobox(frame_engine, textvariable=self.tts_mode_var, values=["native", "cosyvoice"], state="readonly", width=12)
+        engine_cb = ttk.Combobox(frame_engine, textvariable=self.tts_mode_var, values=list(config.TTS_ENGINE_CAPABILITIES.keys()), state="readonly", width=12)
         engine_cb.pack(side=tk.LEFT, padx=5)
-        tk.Label(frame_engine, text="(AI 服务需本地启动 CosyVoice)", fg="gray", font=("", 10)).pack(side=tk.LEFT)
+        engine_cb.bind("<<ComboboxSelected>>", lambda e: self.refresh_params_ui())
+        tk.Label(frame_engine, text="(AI 模式效果最佳)", fg="gray", font=("", 10)).pack(side=tk.LEFT)
 
+        # 4. 动态参数配置区
+        self.param_frame = tk.LabelFrame(self.root, text="引擎参数调节")
+        self.param_frame.pack(fill=tk.X, **pad_options)
+        # 具体内容在 refresh_params_ui 中动态生成
 
-        # 4. 进度条与状态显示
+        # 5. 进度条与状态显示
         frame_progress = tk.Frame(self.root)
-        frame_progress.pack(fill=tk.X, pady=20, padx=10)
+        frame_progress.pack(fill=tk.X, pady=10, padx=10)
         self.progress_bar = ttk.Progressbar(frame_progress, orient=tk.HORIZONTAL, mode='determinate')
         self.progress_bar.pack(fill=tk.X)
         self.status_label = tk.Label(frame_progress, text="准备就绪", fg="gray")
         self.status_label.pack(anchor=tk.W, pady=5)
 
-        # 5. 底部操作按钮
+        # 6. 底部操作按钮
         frame_actions = tk.Frame(self.root)
         frame_actions.pack(pady=10)
         self.btn_run = tk.Button(frame_actions, text="🚀 启动自动混流渲染", bg="#4CAF50", fg="white", width=20, height=2, command=self.start_processing)
         self.btn_run.pack()
+
+    def refresh_params_ui(self):
+        """根据当前选择的引擎动态更新参数面板"""
+        for widget in self.param_frame.winfo_children():
+            widget.destroy()
+            
+        mode = self.tts_mode_var.get()
+        capability = config.TTS_ENGINE_CAPABILITIES[mode]
+        params = capability["params"]
+
+        # 网格布局参数
+        col = 0
+        if "language" in params:
+            tk.Label(self.param_frame, text="语言:").grid(row=0, column=col, padx=5, pady=5)
+            tk.OptionMenu(self.param_frame, self.language_var, *capability["languages"]).grid(row=0, column=col+1, padx=5)
+            col += 2
+            
+        if "gender" in params:
+            tk.Label(self.param_frame, text="性别:").grid(row=0, column=col, padx=5, pady=5)
+            tk.OptionMenu(self.param_frame, self.gender_var, *capability["genders"]).grid(row=0, column=col+1, padx=5)
+            col += 2
+            
+        if "style" in params:
+            tk.Label(self.param_frame, text="风格:").grid(row=0, column=col, padx=5, pady=5)
+            tk.OptionMenu(self.param_frame, self.style_var, *capability["styles"]).grid(row=0, column=col+1, padx=5)
+            col += 2
+            
+        if "rate" in params:
+            tk.Label(self.param_frame, text="语速:").grid(row=0, column=col, padx=5, pady=5)
+            tk.Scale(self.param_frame, from_=100, to=300, orient=tk.HORIZONTAL, variable=self.rate_var, width=10, length=100).grid(row=0, column=col+1, padx=5)
 
     def select_video(self):
         filepath = filedialog.askopenfilename(title="选择原视频", filetypes=[("MP4 files", "*.mp4"), ("All files", "*.*")])
@@ -106,8 +134,15 @@ class LarkDubbingApp:
     def start_processing(self):
         video_path = self.video_path_var.get()
         srt_path = self.srt_path_var.get()
-        gender = self.gender_var.get()
-        style = self.style_var.get()
+        
+        # 收集所有当前参数
+        params = {
+            "mode": self.tts_mode_var.get(),
+            "gender": self.gender_var.get(),
+            "style": self.style_var.get(),
+            "language": self.language_var.get(),
+            "rate": self.rate_var.get()
+        }
 
         if not video_path or not os.path.exists(video_path):
             messagebox.showerror("错误", "请选择有效的视频文件！")
@@ -121,11 +156,11 @@ class LarkDubbingApp:
         self.progress_bar['value'] = 0
         
         # 挂载后台工作线程
-        mode = self.tts_mode_var.get()
-        threading.Thread(target=self._worker_thread, args=(video_path, srt_path, gender, style, mode), daemon=True).start()
+        threading.Thread(target=self._worker_thread, args=(video_path, srt_path, params), daemon=True).start()
 
-    def _worker_thread(self, video_path, srt_path, gender, style, mode):
+    def _worker_thread(self, video_path, srt_path, params):
         try:
+            mode = params["mode"]
             # Step 1
             self.root.after(0, self.update_status, "1. 正在解析物理时间轴...")
             parser = SubtitleParser(srt_path)
@@ -134,8 +169,9 @@ class LarkDubbingApp:
                 raise ValueError("未提取到任何有效字幕！请检查文件格式。")
 
             # Step 2
-            self.root.after(0, self.update_status, f"2. 正在初始化发音引擎({mode}/{gender}/{style})...")
-            tts = get_tts_provider(mode, gender, style)
+            self.root.after(0, self.update_status, f"2. 正在初始化发音引擎({mode})...")
+            tts = get_tts_provider(params)
+
             
             if os.path.exists(config.TEMP_DIR):
                 shutil.rmtree(config.TEMP_DIR)

@@ -84,7 +84,40 @@ docker run -d --name lark-cosyvoice \
 
 ---
 
-## �️ 项目结构
+## 📦 离线环境分发指南
+
+若需将本项目部署至无网络连接的封闭内网，请在有网环境下执行以下封包操作：
+
+### 1. Python 依赖包封存
+在有网机器上下载所有依赖的安装包：
+```bash
+mkdir offline_packages
+pip download -r requirements.txt -d ./offline_packages
+```
+在离线机器上进行安装：
+```bash
+pip install --no-index --find-links=./offline_packages -r requirements.txt
+```
+
+### 2. Docker 镜像封存 (针对 CosyVoice)
+在有网机器上导出镜像：
+```bash
+docker pull harryliu888/cosyvoice:latest
+docker save harryliu888/cosyvoice:latest -o cosyvoice_latest.tar
+```
+在离线机器上导入镜像：
+```bash
+docker load -i cosyvoice_latest.tar
+```
+
+### 3. 模型与资源固化
+请确保将以下目录内容完整拷贝至离线环境：
+- `models/CosyVoice-300M/` (通过前述 ModelScope 指令下载的权重)
+- `demo/` (示例素材与测试用例)
+
+---
+
+## 🏗️ 项目结构
 
 - `gui.py`: **主入口**。运行后弹出可视化窗口。
 - `main.py`: 命令行入口。适合批量处理脚本。

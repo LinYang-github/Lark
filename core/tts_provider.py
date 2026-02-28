@@ -25,77 +25,75 @@ class TTSProvider(ABC):
         pass
 
 class Pyttsx3TTS(TTSProvider):
-    """基于系统自带接口的本地 TTS 引擎实现 (Mac fallback: say, Windows: sapi5)"""
-    def __init__(self, rate: int = 150, gender: str = "female", style: str = "standard"):
-        self.rate = rate
+    """基于系统自带接口的本地 TTS 引擎实现 (Mac: say, Windows: sapi5)"""
+    def __init__(self, gender="female", rate=180):
         self.is_mac = sys.platform == "darwin"
+        self.gender = gender
+        self.rate = rate
         self.engine = None
         
-        # 从维度地图获取具体音频引擎标识
-        mapping = config.VOICE_MAP.get(gender, config.VOICE_MAP["female"]).get(style, config.VOICE_MAP["female"]["standard"])
-        self.mac_voice = mapping["mac"]
-        target_win_voice = mapping["win"]
-        
-        if not self.is_mac and pyttsx3 is not None:
+        cap = config.TTS_ENGINE_CAPABILITIES["native"]
+        self.voice_name = cap["voices"][gender]["win" if not self.is_mac else "mac"]
+
+        if not self.is_mac:
+            if pyttsx3 is None:
+                raise ImportError("Windows 下运行 Native 模式需安装 pyttsx3")
             try:
                 self.engine = pyttsx3.init()
                 self.engine.setProperty('rate', rate)
-                
-                # 尝试选择一个合适的系统声音
                 voices = self.engine.getProperty('voices')
-                for voice in voices:
-                    voice_id = getattr(voice, 'id', '')
-                    voice_name = getattr(voice, 'name', '')
-                    lang_str = str(getattr(voice, 'languages', []))
-                    
-                    # 优先匹配指定音色名，如果没有则 fallback 到普通中文
-                    if target_win_voice.lower() in voice_name.lower() or target_win_voice.lower() in voice_id.lower():
-                        self.engine.setProperty('voice', voice_id)
+                for v in voices:
+                    if self.voice_name.lower() in v.name.lower():
+                        self.engine.setProperty('voice', v.id)
                         break
-                    elif 'zh' in lang_str or 'Chinese' in voice_name or 'CN' in voice_id:
-                        self.engine.setProperty('voice', voice_id)
-                        # 不 break，继续找更精准的 target_win_voice
             except Exception as e:
                 print(f"初始化 pyttsx3 失败: {e}")
-                
+
     def generate_audio(self, text: str, output_path: str) -> bool:
         if self.is_mac:
             # Mac 专用 fallback: 使用自带的 say 命令生成 aiff，再用 ffmpeg 转 wav
             try:
                 import subprocess
                 aiff_path = output_path.replace(".wav", ".aiff")
-                # 使用映射的发音人
-                subprocess.run(["say", "-v", self.mac_voice, "-o", aiff_path, text], check=True)
+                # say 命令参数: -v 音色, -r 语速 (wpm), -o 输出文件
+                subprocess.run(["say", "-v", self.voice_name, "-r", str(self.rate), "-o", aiff_path, text], check=True)
                 # 转换为 wav 格式
                 subprocess.run(["ffmpeg", "-y", "-i", aiff_path, output_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
                 if os.path.exists(aiff_path):
                     os.remove(aiff_path)
                 return True
             except Exception as e:
-                print(f"Mac fallback (say) 生成语音失败: {e}")
+                print(f"Mac say 命令生成失败: {e}")
                 return False
         else:
             if not self.engine:
-                print("Windows 环境下 pyttsx3 引擎未正确初始化")
                 return False
             try:
                 self.engine.save_to_file(text, output_path)
                 self.engine.runAndWait()
-                return os.path.exists(output_path)
+                return True
             except Exception as e:
-                print(f"Pyttsx3TTS 生成语音失败: {e}")
+                print(f"Pyttsx3 生成失败: {e}")
                 return False
 
 class HttpTTS(TTSProvider):
     """用于对接本地 CosyVoice 或其他 AI 模型 API 服务"""
-    def __init__(self, api_url: str = None, gender: str = "female", style: str = "standard"):
-        self.api_url = api_url or config.COSYVOICE_URL
-        mapping = config.VOICE_MAP.get(gender, config.VOICE_MAP["female"]).get(style, config.VOICE_MAP["female"]["standard"])
-        self.http_voice = mapping["http"]
+    def __init__(self, params):
+        self.api_url = config.COSYVOICE_URL
+        mode = params["mode"]
+        lang = params["language"]
+        gender = params["gender"]
+        style = params["style"]
         
+        cap = config.TTS_ENGINE_CAPABILITIES[mode]
+        try:
+            self.http_voice = cap["voices"][lang][gender][style]
+        except KeyError:
+            print(f"Warning: Voice not found for {lang}/{gender}/{style}. Fallback.")
+            self.http_voice = "中文女"
+
     def generate_audio(self, text: str, output_path: str) -> bool:
         try:
-            # 兼容 CosyVoice (OpenAI 规范) 的 Payload
             payload = {
                 "model": "cosyvoice",
                 "input": text,
@@ -111,35 +109,18 @@ class HttpTTS(TTSProvider):
                         f.write(response.read())
                     return True
                 else:
-                    print(f"CosyVoice API 响应异常: {response.status}")
                     return False
         except Exception as e:
-            print(f"连接 CosyVoice 服务失败 (请确保服务已启动于 {self.api_url}): {e}")
+            print(f"连接 CosyVoice 服务失败: {e}")
             return False
 
-def get_tts_provider(mode: str, gender: str, style: str) -> TTSProvider:
-    """TTS 引擎工厂方法"""
-    if mode == "cosyvoice":
-        return HttpTTS(gender=gender, style=style)
+def get_tts_provider(params: dict) -> TTSProvider:
+    mode = params["mode"]
+    if mode == "native":
+        # 获取可选的 rate，如果不存在则使用默认值
+        rate = params.get("rate", config.TTS_ENGINE_CAPABILITIES["native"]["default_rate"])
+        return Pyttsx3TTS(params["gender"], rate)
+    elif mode == "cosyvoice":
+        return HttpTTS(params)
     else:
-        return Pyttsx3TTS(rate=150, gender=gender, style=style)
-
-
-if __name__ == "__main__":
-    # ===== 阶段 2 独立测试入口 =====
-    test_text = "测试跨平台的离线语音合成功能！"
-    
-    parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    temp_dir = os.path.join(parent_dir, "temp")
-    test_output = os.path.join(temp_dir, "test_tts.wav")
-    
-    os.makedirs(temp_dir, exist_ok=True)
-    
-    print(f"正在初始化 Pyttsx3TTS 引擎 (Platform: {sys.platform})...")
-    tts = Pyttsx3TTS(gender="male", style="broadcaster")
-    print("开始生成音频...")
-    success = tts.generate_audio(test_text, test_output)
-    if success:
-        print(f"✅ TTS 测试成功，音频已保存在: {test_output}")
-    else:
-        print("❌ TTS 测试失败。")
+        raise ValueError(f"不支持的 TTS 模式: {mode}")
